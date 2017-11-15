@@ -1,0 +1,28 @@
+{
+    "author": "ahmed.arnaut@hotmail.com",
+    "dependencies": {},
+    "keywords": [],
+    "name": "pong",
+    "pebble": {
+        "displayName": "PONG",
+        "enableMultiJS": true,
+        "messageKeys": [],
+        "projectType": "native",
+        "resources": {
+            "media": []
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk",
+            "diorite",
+            "emery"
+        ],
+        "uuid": "27b779f7-7d7e-4a54-a641-53778ce60b0a",
+        "watchapp": {
+            "watchface": false
+        }
+    },
+    "version": "1.0.0"
+}
