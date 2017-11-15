@@ -1,7 +1,6 @@
 #include <pebble.h>
 
 #include "ball.h"
-#include "config.h"
 
 static const int16_t directions[] = {-1, 1};
 

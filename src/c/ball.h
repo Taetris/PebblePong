@@ -1,7 +1,5 @@
 #pragma once
 
-#include "player.h"
-
 typedef struct Ball {
   int16_t x;
   int16_t y;

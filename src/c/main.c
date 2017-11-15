@@ -1,9 +1,24 @@
 #include <pebble.h>
 
-#include "player.h"
+#include "paddle.h"
 #include "ball.h"
 #include "field.h"
-#include "config.h"
+
+// screen
+#define REFRESH_RATE 300
+
+// field
+#define FIELD_OFFSET 30 
+#define BORDER_WIDTH 4
+
+// player
+#define PADDLE_WIDTH 10
+#define PADDLE_HEIGHT 20
+#define PADDLE_MOVE_PIXELS 10 
+
+// ball
+#define BALL_RADIUS 5
+#define BALL_SPEED 6
 
 static Window *window;
 static Layer *canvas_layer;
@@ -11,39 +26,39 @@ static TextLayer *score_layer;
 
 static AppTimer *timer;
 
-static Player *player;
-static Player *ai;
+static Paddle *leftPaddle;
+static Paddle *rightPaddle;
 static Ball *ball;
 
-char score_text[128];
-static int16_t playerScore;
-static int16_t aiScore;
+char score[20];
+static int16_t leftPaddleScore;
+static int16_t rightPaddleScore;
 
-static void restart(GRect bounds) {
+static void restart() {
+  GRect bounds = layer_get_bounds(canvas_layer);
   reset_ball(ball, bounds);
-  reset_left_player(ai, bounds);
-  reset_right_player(player, bounds);
-  snprintf(score_text, sizeof(score_text), "%d  %d", aiScore, playerScore);
-  text_layer_set_text(score_layer, score_text);
+  reset_left_paddle(leftPaddle, bounds);
+  reset_right_paddle(rightPaddle, bounds);
+  snprintf(score, sizeof(score), "%d  %d", leftPaddleScore, rightPaddleScore);
+  text_layer_set_text(score_layer, score);
 }
 
 static void new_game() {
-  GRect bounds = layer_get_bounds(canvas_layer);
-  playerScore = 0;
-  aiScore = 0;
-  restart(bounds);
+  leftPaddleScore = 0;
+  rightPaddleScore = 0;
+  restart();
 }
 
-static bool is_ball_colliding_with_left_player(GRect bounds, int16_t dx, int16_t dy) {
-  return ((ball->x + dx <= ai->x + ai->width) && 
-          (ball->y + dy >= ai->y) &&
-          (ball->y + dy <= ai->y + ai->height));
+static bool is_ball_colliding_with_left_paddle(GRect bounds, int16_t dx, int16_t dy) {
+  return ((ball->x + dx <= leftPaddle->x + leftPaddle->width) && 
+          (ball->y + dy >= leftPaddle->y) &&
+          (ball->y + dy <= leftPaddle->y + leftPaddle->height));
 }
 
-static bool is_ball_colliding_with_right_player(GRect bounds, int16_t dx, int16_t dy) {
-  return ((ball->x + dx >= player->x) && 
-          (ball->y + dy >= player->y) &&
-          (ball->y + dy <= player->y + player->height));
+static bool is_ball_colliding_with_right_paddle(GRect bounds, int16_t dx, int16_t dy) {
+  return ((ball->x + dx >= rightPaddle->x) && 
+          (ball->y + dy >= rightPaddle->y) &&
+          (ball->y + dy <= rightPaddle->y + rightPaddle->height));
 }
 
 static bool is_ball_colliding_with_left_wall(GRect bounds, int16_t dx, int16_t dy) {
@@ -68,29 +83,29 @@ static void on_timer_tick(void *data) {
   timer = app_timer_register(REFRESH_RATE, on_timer_tick, NULL);
   layer_mark_dirty(canvas_layer);
   
-  if (ball->x <= (bounds.size.w / 2) + ai->width) {
-    if (ball->y < ai->y) {
-      move_up(ai, bounds, PLAYER_MOVE_PIXELS);
+  if (ball->x <= (bounds.size.w / 2) + leftPaddle->width) {
+    if (ball->y < leftPaddle->y) {
+      move_up(leftPaddle, bounds, PADDLE_MOVE_PIXELS);
     } else {
-      move_down(ai, bounds, PLAYER_MOVE_PIXELS);
+      move_down(leftPaddle, bounds, PADDLE_MOVE_PIXELS);
     }
   }
   
   int16_t dx = (ball->radius + ball->speed) * ball->directionX;
   int16_t dy = (ball->radius + ball->speed) * ball->directionY;
   
-  if (is_ball_colliding_with_left_player(bounds, dx, dy) || 
-      is_ball_colliding_with_right_player(bounds, dx, dy)) {
+  if (is_ball_colliding_with_left_paddle(bounds, dx, dy) || 
+      is_ball_colliding_with_right_paddle(bounds, dx, dy)) {
     change_ball_direction(ball, ball->directionX * -1, ball->directionY);
   } else if (is_ball_colliding_with_top_wall(bounds, dx, dy) || 
              is_ball_colliding_with_bottom_wall(bounds, dx, dy)) {
     change_ball_direction(ball, ball->directionX, ball->directionY * -1);
   } else if (is_ball_colliding_with_left_wall(bounds, dx, dy)) {
-    playerScore++;
-    restart(bounds);
+    rightPaddleScore++;
+    restart();
   } else if (is_ball_colliding_with_right_wall(bounds, dx, dy)) {
-    aiScore++;
-    restart(bounds);
+    leftPaddleScore++;
+    restart();
   }
   
   move_ball(ball);
@@ -99,12 +114,17 @@ static void on_timer_tick(void *data) {
 static void canvas_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   
-  draw_field(ctx, bounds);
+  draw_field(ctx, bounds, BORDER_WIDTH);
   
-  // TODO: Null checks
-  draw_player(player, layer, ctx);
-  draw_player(ai, layer, ctx);
-  draw_ball(ball, layer, ctx);
+  if (leftPaddle != NULL) {
+    draw_paddle(leftPaddle, layer, ctx);
+  }
+  if (rightPaddle != NULL) {
+    draw_paddle(rightPaddle, layer, ctx);
+  }
+  if (ball != NULL) {
+    draw_ball(ball, layer, ctx);
+  }
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -113,14 +133,14 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
   GRect bounds = layer_get_bounds(canvas_layer);
-  if (move_up(player, bounds, PLAYER_MOVE_PIXELS)) {
+  if (move_up(rightPaddle, bounds, PADDLE_MOVE_PIXELS)) {
     layer_mark_dirty(canvas_layer);
   }
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
   GRect bounds = layer_get_bounds(canvas_layer);
-  if (move_down(player, bounds, PLAYER_MOVE_PIXELS)) {
+  if (move_down(rightPaddle, bounds, PADDLE_MOVE_PIXELS)) {
     layer_mark_dirty(canvas_layer);
   }
 }
@@ -144,17 +164,34 @@ static void window_load(Window *window) {
   text_layer_set_text_alignment(score_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(score_layer));
   
-  player = create_right_player(bounds, GColorBlack);
-  ai = create_left_player(bounds, GColorBlack);
+  leftPaddle = create_left_paddle(bounds, PADDLE_WIDTH, PADDLE_HEIGHT, GColorBlack);
+  rightPaddle = create_right_paddle(bounds, PADDLE_WIDTH, PADDLE_HEIGHT, GColorBlack);
   ball = create_ball(bounds, BALL_SPEED, BALL_RADIUS, GColorBlack);
-  playerScore = 0;
-  aiScore = 0;
+  leftPaddleScore = 0;
+  rightPaddleScore = 0;
   
   timer = app_timer_register(REFRESH_RATE, on_timer_tick, NULL);
 }
 
 static void window_unload(Window *window) {
-  // kill timer and release resources
+  text_layer_destroy(score_layer);
+  
+  if (leftPaddle != NULL) {
+    free(leftPaddle);
+    leftPaddle = NULL; 
+  }
+  if (rightPaddle != NULL) {
+    free(rightPaddle);
+    rightPaddle = NULL; 
+  }
+  if (ball != NULL) {
+    free(ball);
+    ball = NULL;  
+  }
+  if (timer != NULL) {
+    app_timer_cancel(timer);
+    timer = NULL;
+  }
 }
 
 static void init(void) {
@@ -176,9 +213,6 @@ static void deinit(void) {
 
 int main(void) {
   init();
-
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Done initializing, pushed window: %p", window);
-
   app_event_loop();
   deinit();
 }
